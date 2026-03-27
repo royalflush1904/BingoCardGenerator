@@ -115,15 +115,12 @@ def load_quotes(filepath: Path, count: int) -> list[str]:
 
 def main():
     parser = argparse.ArgumentParser(description="Generate Bingo Cards")
-    parser.add_argument("--players", type=int, required=True, help="Number of players (number of bingo cards to generate)")
-    parser.add_argument("--type", choices=["integers", "quotes"], required=True, help="Content type for the cards")
-    parser.add_argument("--inputfile", type=str, help="Path to text file with quotes (required if --type is quotes)")
-    parser.add_argument("--output-dir", type=str, default="bingo_cards", help="Output directory for PNG files")
+    parser.add_argument("-p", "--players", type=int, required=True, help="Number of players (number of bingo cards to generate)")
+    parser.add_argument("-t", "--type", choices=["integers", "quotes"], default="quotes", help="Content type for the cards (default: quotes)")
+    parser.add_argument("-i", "--inputfile", type=str, default="quotes.txt", help="Path to text file with quotes (default: quotes.txt)")
+    parser.add_argument("-o", "--output-dir", type=str, default=str(Path.cwd()), help="Output directory for PNG files (default: current working directory)")
     
     args = parser.parse_args()
-    
-    if args.type == "quotes" and not args.inputfile:
-        parser.error("--inputfile is required when --type is quotes")
     
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
