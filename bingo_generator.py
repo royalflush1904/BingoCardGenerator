@@ -7,8 +7,6 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 class BingoCard:
-    FREE_SPACE = "FREE"
-    
     def __init__(self, content: list[str], card_id: int, grid_size: int = 5):
         self.content = content
         self.card_id = card_id
@@ -19,16 +17,12 @@ class BingoCard:
         random.shuffle(self.content)
         grid = []
         index = 0
-        free_pos = self.grid_size // 2
         
         for row in range(self.grid_size):
             row_content = []
             for col in range(self.grid_size):
-                if row == free_pos and col == free_pos:
-                    row_content.append(self.FREE_SPACE)
-                else:
-                    row_content.append(self.content[index])
-                    index += 1
+                row_content.append(self.content[index])
+                index += 1
             grid.append(row_content)
         return grid
     
@@ -55,10 +49,6 @@ class BingoCard:
                 text = self.grid[row][col]
                 cell_width = x2 - x1
                 cell_height = y2 - y1
-                
-                if text == self.FREE_SPACE:
-                    draw.rectangle([x1, y1, x2, y2], fill="#D3D3D3")
-                    continue
                 
                 font_size = max_font_size
                 font = None
@@ -162,8 +152,29 @@ def main():
     parser.add_argument("-o", "--output-dir", type=str, default=str(Path.cwd()), help="Output directory for PNG files (default: current working directory)")
     parser.add_argument("-g", "--grid-size", type=int, default=5, help="Grid size (NxN, e.g., 4 for 4x4, 5 for 5x5, default: 5)")
     parser.add_argument("-d", "--duplicates", action="store_true", help="Allow duplicate quotes on a single card (default: False)")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Print all parameters before generating (default: False)")
     
     args = parser.parse_args()
+    
+    if args.verbose:
+        print("Parameters:")
+        print(f"  -p, --players   | required=True  | int    | Number of bingo cards to generate")
+        print(f"  -t, --type      | required=False | str    | Content type (choices: integers, quotes), default: quotes")
+        print(f"  -i, --inputfile | required=False | str    | Path to quotes file, default: quotes.txt")
+        print(f"  -o, --output-dir| required=False | str    | Output directory, default: {Path.cwd()}")
+        print(f"  -g, --grid-size | required=False | int    | Grid size (NxN), default: 5")
+        print(f"  -d, --duplicates| required=False | bool   | Allow duplicates (action=store_true), default: False")
+        print(f"  -v, --verbose   | required=False | bool   | Print parameters (action=store_true), default: False")
+        print()
+        print("Current values:")
+        print(f"  --players    = {args.players}")
+        print(f"  --type       = {args.type}")
+        print(f"  --inputfile  = {args.inputfile}")
+        print(f"  --output-dir = {args.output_dir}")
+        print(f"  --grid-size  = {args.grid_size}")
+        print(f"  --duplicates = {args.duplicates}")
+        print(f"  --verbose    = {args.verbose}")
+        print()
     
     if args.grid_size < 2:
         print("Error: Grid size must be at least 2")
@@ -172,7 +183,10 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    cells_needed = args.grid_size * args.grid_size - 1
+    for png_file in output_dir.glob("bingo_card_*.png"):
+        png_file.unlink()
+    
+    cells_needed = args.grid_size * args.grid_size
     
     if args.type == "integers":
         content = generate_integers(cells_needed)
