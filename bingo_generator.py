@@ -172,7 +172,7 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    cells_needed = args.players * (args.grid_size * args.grid_size - 1)
+    cells_needed = args.grid_size * args.grid_size - 1
     
     if args.type == "integers":
         content = generate_integers(cells_needed)
