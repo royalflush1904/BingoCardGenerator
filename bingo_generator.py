@@ -2,47 +2,49 @@
 import argparse
 import random
 from pathlib import Path
+from typing import Any, Union
 from PIL import Image, ImageDraw, ImageFont
 
 
 class BingoCard:
     FREE_SPACE = "FREE"
     
-    def __init__(self, content: list[str], card_id: int):
+    def __init__(self, content: list[str], card_id: int, grid_size: int = 5):
         self.content = content
         self.card_id = card_id
+        self.grid_size = grid_size
         self.grid = self._create_grid()
     
     def _create_grid(self) -> list[list[str]]:
         random.shuffle(self.content)
         grid = []
         index = 0
-        for _ in range(5):
-            row = []
-            for col in range(5):
-                if row == [] and col == 2:
-                    row.append(self.FREE_SPACE)
+        free_pos = self.grid_size // 2
+        
+        for row in range(self.grid_size):
+            row_content = []
+            for col in range(self.grid_size):
+                if row == free_pos and col == free_pos:
+                    row_content.append(self.FREE_SPACE)
                 else:
-                    row.append(self.content[index])
+                    row_content.append(self.content[index])
                     index += 1
-            grid.append(row)
+            grid.append(row_content)
         return grid
     
-    def save_as_png(self, output_path: Path, font_size: int = 20):
+    def save_as_png(self, output_path: Path):
         cell_size = 150
         padding = 5
-        card_size = cell_size * 5
+        card_size = cell_size * self.grid_size
         
         img = Image.new("RGB", (card_size, card_size), "white")
         draw = ImageDraw.Draw(img)
         
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
-        except (OSError, IOError):
-            font = ImageFont.load_default()
+        max_font_size = 20
+        min_font_size = 8
         
-        for row in range(5):
-            for col in range(5):
+        for row in range(self.grid_size):
+            for col in range(self.grid_size):
                 x1 = col * cell_size + padding
                 y1 = row * cell_size + padding
                 x2 = (col + 1) * cell_size - padding
@@ -51,47 +53,83 @@ class BingoCard:
                 draw.rectangle([x1, y1, x2, y2], outline="black", width=2)
                 
                 text = self.grid[row][col]
+                cell_width = x2 - x1
+                cell_height = y2 - y1
                 
                 if text == self.FREE_SPACE:
                     draw.rectangle([x1, y1, x2, y2], fill="#D3D3D3")
+                    continue
                 
-                bbox = draw.textbbox((0, 0), text, font=font)
-                text_width = bbox[2] - bbox[0]
-                text_height = bbox[3] - bbox[1]
+                font_size = max_font_size
+                font = None
+                lines = []
+                while font_size >= min_font_size:
+                    try:
+                        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
+                    except (OSError, IOError):
+                        font = ImageFont.load_default()
+                    
+                    lines = self._wrap_text(draw, text, font, cell_width)
+                    total_height = sum(draw.textbbox((0, 0), line, font=font)[3] for line in lines) + (len(lines) - 1) * 3
+                    
+                    if self._text_fits(draw, lines, font, cell_width, cell_height):
+                        break
+                    font_size -= 1
                 
-                x_text = x1 + (x2 - x1 - text_width) // 2
-                y_text = y1 + (y2 - y1 - text_height) // 2
+                if font is None or (lines and not self._text_fits(draw, lines, font, cell_width, cell_height)):
+                    font_size = min_font_size
+                    try:
+                        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
+                    except (OSError, IOError):
+                        font = ImageFont.load_default()
+                    lines = self._wrap_text(draw, text, font, cell_width)
                 
-                max_chars = 15
-                if len(text) > max_chars:
-                    mid = len(text) // 2
-                    split_idx = text.rfind(" ", 0, mid + 5)
-                    if split_idx == -1:
-                        split_idx = mid
-                    
-                    line1 = text[:split_idx]
-                    line2 = text[split_idx:].strip()
-                    
-                    if len(line1) > max_chars:
-                        line1 = line1[:max_chars]
-                    if len(line2) > max_chars:
-                        line2 = line2[:max_chars]
-                    
-                    bbox1 = draw.textbbox((0, 0), line1, font=font)
-                    bbox2 = draw.textbbox((0, 0), line2, font=font)
-                    
-                    text_width = max(bbox1[2] - bbox1[0], bbox2[2] - bbox2[0])
-                    total_height = (bbox1[3] - bbox1[1]) + (bbox2[3] - bbox2[1]) + 5
-                    
-                    x_text = x1 + (x2 - x1 - text_width) // 2
-                    y_text = y1 + (y2 - y1 - total_height) // 2
-                    
-                    draw.text((x_text, y_text), line1, fill="black", font=font)
-                    draw.text((x_text, y_text + (bbox1[3] - bbox1[1]) + 5), line2, fill="black", font=font)
-                else:
-                    draw.text((x_text, y_text), text, fill="black", font=font)
+                self._draw_wrapped_text(draw, lines, font, x1, y1, cell_width, cell_height)
         
         img.save(output_path, "PNG")
+    
+    def _wrap_text(self, draw: ImageDraw.ImageDraw, text: str, font: Any, max_width: int) -> list[str]:
+        words = text.split()
+        if not words:
+            return [""]
+        
+        lines = []
+        current_line = ""
+        
+        for word in words:
+            test_line = f"{current_line} {word}".strip()
+            bbox = draw.textbbox((0, 0), test_line, font=font)
+            test_width = bbox[2] - bbox[0]
+            
+            if test_width <= max_width:
+                current_line = test_line
+            else:
+                if current_line:
+                    lines.append(current_line)
+                current_line = word
+        
+        if current_line:
+            lines.append(current_line)
+        
+        return lines if lines else [""]
+    
+    def _text_fits(self, draw: ImageDraw.ImageDraw, lines: list[str], font: Any, cell_width: int, cell_height: int) -> bool:
+        total_height = sum(draw.textbbox((0, 0), line, font=font)[3] for line in lines) + (len(lines) - 1) * 3
+        max_line_width = max(draw.textbbox((0, 0), line, font=font)[2] for line in lines)
+        return max_line_width <= cell_width and total_height <= cell_height
+    
+    def _draw_wrapped_text(self, draw: ImageDraw.ImageDraw, lines: list[str], font: Any, x1: int, y1: int, cell_width: int, cell_height: int):
+        line_heights = [draw.textbbox((0, 0), line, font=font)[3] for line in lines]
+        total_height = sum(line_heights) + (len(lines) - 1) * 3
+        
+        y_offset = y1 + (cell_height - total_height) // 2
+        
+        for i, line in enumerate(lines):
+            bbox = draw.textbbox((0, 0), line, font=font)
+            text_width = bbox[2] - bbox[0]
+            x_offset = x1 + (cell_width - text_width) // 2
+            draw.text((x_offset, y_offset), line, fill="black", font=font)
+            y_offset += line_heights[i] + 3
 
 
 def generate_integers(count: int) -> list[str]:
@@ -102,9 +140,12 @@ def generate_integers(count: int) -> list[str]:
     return [str(n) for n in numbers[:count]]
 
 
-def load_quotes(filepath: Path, count: int) -> list[str]:
+def load_quotes(filepath: Path, count: int, allow_duplicates: bool = False) -> list[str]:
     with open(filepath, "r", encoding="utf-8") as f:
         quotes = [line.strip() for line in f if line.strip()]
+    
+    if len(quotes) < count and not allow_duplicates:
+        raise ValueError(f"Not enough unique quotes ({len(quotes)}) to fill the card without duplicates. Need at least {count} quotes.")
     
     if len(quotes) < count:
         quotes = quotes * ((count // len(quotes)) + 1)
@@ -119,30 +160,40 @@ def main():
     parser.add_argument("-t", "--type", choices=["integers", "quotes"], default="quotes", help="Content type for the cards (default: quotes)")
     parser.add_argument("-i", "--inputfile", type=str, default="quotes.txt", help="Path to text file with quotes (default: quotes.txt)")
     parser.add_argument("-o", "--output-dir", type=str, default=str(Path.cwd()), help="Output directory for PNG files (default: current working directory)")
+    parser.add_argument("-g", "--grid-size", type=int, default=5, help="Grid size (NxN, e.g., 4 for 4x4, 5 for 5x5, default: 5)")
+    parser.add_argument("-d", "--duplicates", action="store_true", help="Allow duplicate quotes on a single card (default: False)")
     
     args = parser.parse_args()
+    
+    if args.grid_size < 2:
+        print("Error: Grid size must be at least 2")
+        return 1
     
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    content_count = args.players * 24
+    cells_needed = args.players * (args.grid_size * args.grid_size - 1)
     
     if args.type == "integers":
-        content = generate_integers(content_count)
+        content = generate_integers(cells_needed)
     else:
         input_path = Path(args.inputfile)
         if not input_path.exists():
             print(f"Error: Input file '{input_path}' not found")
             return 1
-        content = load_quotes(input_path, content_count)
+        try:
+            content = load_quotes(input_path, cells_needed, args.duplicates)
+        except ValueError as e:
+            print(f"Error: {e}")
+            return 1
     
     for i in range(args.players):
-        card = BingoCard(content.copy(), i + 1)
+        card = BingoCard(content.copy(), i + 1, args.grid_size)
         output_path = output_dir / f"bingo_card_{i + 1}.png"
         card.save_as_png(output_path)
         print(f"Generated: {output_path}")
     
-    print(f"\nSuccessfully generated {args.players} Bingo cards in '{output_dir}'")
+    print(f"\nSuccessfully generated {args.players} {args.grid_size}x{args.grid_size} Bingo cards in '{output_dir}'")
     return 0
 
 
