@@ -7,6 +7,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 class BingoCard:
+    IMAGE_SIZE = 1200
+    
     def __init__(self, content: list[str], card_id: int, grid_size: int = 5):
         self.content = content
         self.card_id = card_id
@@ -27,9 +29,9 @@ class BingoCard:
         return grid
     
     def save_as_png(self, output_path: Path):
-        cell_size = 150
-        padding = 5
-        card_size = cell_size * self.grid_size
+        cell_size = self.IMAGE_SIZE // self.grid_size
+        padding = 8
+        card_size = self.IMAGE_SIZE
         
         img = Image.new("RGB", (card_size, card_size), "white")
         draw = ImageDraw.Draw(img)
@@ -144,6 +146,29 @@ def load_quotes(filepath: Path, count: int, allow_duplicates: bool = False) -> l
     return selected
 
 
+def distribute_quotes_evenly(quotes: list[str], num_cards: int, cells_per_card: int) -> list[list[str]]:
+    total_cells_needed = num_cards * cells_per_card
+    
+    if len(quotes) < total_cells_needed:
+        repeats_needed = (total_cells_needed // len(quotes)) + 1
+        extended_quotes = quotes * repeats_needed
+    else:
+        extended_quotes = quotes[:]
+    
+    random.shuffle(extended_quotes)
+    
+    cards_content = [[] for _ in range(num_cards)]
+    
+    for i, quote in enumerate(extended_quotes[:total_cells_needed]):
+        card_index = i % num_cards
+        cards_content[card_index].append(quote)
+    
+    for card_content in cards_content:
+        random.shuffle(card_content)
+    
+    return cards_content
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate Bingo Cards")
     parser.add_argument("-p", "--players", type=int, required=True, help="Number of players (number of bingo cards to generate)")
@@ -190,19 +215,23 @@ def main():
     
     if args.type == "integers":
         content = generate_integers(cells_needed)
+        cards_content = [content.copy() for _ in range(args.players)]
+        for card_content in cards_content:
+            random.shuffle(card_content)
     else:
         input_path = Path(args.inputfile)
         if not input_path.exists():
             print(f"Error: Input file '{input_path}' not found")
             return 1
         try:
-            content = load_quotes(input_path, cells_needed, args.duplicates)
+            all_quotes = load_quotes(input_path, cells_needed, args.duplicates)
+            cards_content = distribute_quotes_evenly(all_quotes, args.players, cells_needed)
         except ValueError as e:
             print(f"Error: {e}")
             return 1
     
     for i in range(args.players):
-        card = BingoCard(content.copy(), i + 1, args.grid_size)
+        card = BingoCard(cards_content[i], i + 1, args.grid_size)
         output_path = output_dir / f"bingo_card_{i + 1}.png"
         card.save_as_png(output_path)
         print(f"Generated: {output_path}")
