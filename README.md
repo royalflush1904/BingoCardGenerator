@@ -32,6 +32,7 @@ python3 bingo_generator.py -p 3 -t quotes -i quotes.txt -d
 | `-o, --output-dir` | Output directory for PNG files | Current directory |
 | `-g, --grid-size` | Grid size (NxN, e.g., 4 for 4x4) | `5` |
 | `-d, --duplicates` | Allow duplicate quotes on a card | `False` |
+| `-v, --verbose` | Print all parameters before generating | `False` |
 
 ## Installation
 

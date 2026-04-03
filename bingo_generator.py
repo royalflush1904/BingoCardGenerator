@@ -36,8 +36,8 @@ class BingoCard:
         img = Image.new("RGB", (card_size, card_size), "white")
         draw = ImageDraw.Draw(img)
         
-        max_font_size = 20
-        min_font_size = 8
+        max_font_size = 32
+        min_font_size = 10
         
         for row in range(self.grid_size):
             for col in range(self.grid_size):
@@ -132,40 +132,46 @@ def generate_integers(count: int) -> list[str]:
     return [str(n) for n in numbers[:count]]
 
 
-def load_quotes(filepath: Path, count: int, allow_duplicates: bool = False) -> list[str]:
+def load_quotes(filepath: Path) -> list[str]:
     with open(filepath, "r", encoding="utf-8") as f:
         quotes = [line.strip() for line in f if line.strip()]
-    
-    if len(quotes) < count and not allow_duplicates:
-        raise ValueError(f"Not enough unique quotes ({len(quotes)}) to fill the card without duplicates. Need at least {count} quotes.")
-    
-    if len(quotes) < count:
-        quotes = quotes * ((count // len(quotes)) + 1)
-    
-    selected = random.sample(quotes, min(count, len(quotes)))
-    return selected
+    return quotes
 
 
-def distribute_quotes_evenly(quotes: list[str], num_cards: int, cells_per_card: int) -> list[list[str]]:
-    total_cells_needed = num_cards * cells_per_card
-    
-    if len(quotes) < total_cells_needed:
-        repeats_needed = (total_cells_needed // len(quotes)) + 1
-        extended_quotes = quotes * repeats_needed
-    else:
-        extended_quotes = quotes[:]
-    
-    random.shuffle(extended_quotes)
-    
+def distribute_quotes_evenly(
+    quotes: list[str], num_cards: int, cells_per_card: int, allow_duplicates: bool = False
+) -> list[list[str]]:
     cards_content = [[] for _ in range(num_cards)]
-    
-    for i, quote in enumerate(extended_quotes[:total_cells_needed]):
-        card_index = i % num_cards
-        cards_content[card_index].append(quote)
-    
-    for card_content in cards_content:
-        random.shuffle(card_content)
-    
+    total_cells_needed = num_cards * cells_per_card
+
+    if allow_duplicates:
+        if len(quotes) < total_cells_needed:
+            repeats_needed = (total_cells_needed // len(quotes)) + 1
+            extended_quotes = quotes * repeats_needed
+        else:
+            extended_quotes = quotes[:]
+
+        random.shuffle(extended_quotes)
+
+        for i, quote in enumerate(extended_quotes[:total_cells_needed]):
+            card_index = i % num_cards
+            cards_content[card_index].append(quote)
+
+        for card_content in cards_content:
+            random.shuffle(card_content)
+    else:
+        shuffled_quotes = quotes.copy()
+        random.shuffle(shuffled_quotes)
+        
+        quote_pool = shuffled_quotes.copy()
+        
+        for i in range(total_cells_needed):
+            card_index = i % num_cards
+            if not quote_pool:
+                random.shuffle(shuffled_quotes)
+                quote_pool = shuffled_quotes.copy()
+            cards_content[card_index].append(quote_pool.pop())
+
     return cards_content
 
 
@@ -224,8 +230,8 @@ def main():
             print(f"Error: Input file '{input_path}' not found")
             return 1
         try:
-            all_quotes = load_quotes(input_path, cells_needed, args.duplicates)
-            cards_content = distribute_quotes_evenly(all_quotes, args.players, cells_needed)
+            all_quotes = load_quotes(input_path)
+            cards_content = distribute_quotes_evenly(all_quotes, args.players, cells_needed, args.duplicates)
         except ValueError as e:
             print(f"Error: {e}")
             return 1
