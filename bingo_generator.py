@@ -160,17 +160,31 @@ def distribute_quotes_evenly(
         for card_content in cards_content:
             random.shuffle(card_content)
     else:
+        if len(quotes) < cells_per_card:
+            raise ValueError(
+                f"Not enough unique quotes ({len(quotes)}) to fill a card "
+                f"without duplicates. Need at least {cells_per_card} unique quotes."
+            )
+        
         shuffled_quotes = quotes.copy()
         random.shuffle(shuffled_quotes)
         
-        quote_pool = shuffled_quotes.copy()
-        
-        for i in range(total_cells_needed):
-            card_index = i % num_cards
-            if not quote_pool:
-                random.shuffle(shuffled_quotes)
-                quote_pool = shuffled_quotes.copy()
-            cards_content[card_index].append(quote_pool.pop())
+        for i in range(num_cards):
+            current_card_content = []
+            
+            for _ in range(cells_per_card):
+                available_quotes = [q for q in shuffled_quotes if q not in current_card_content]
+                
+                if not available_quotes:
+                    raise ValueError(
+                        f"Cannot fill card {i + 1} without duplicates. "
+                        f"Not enough unique quotes available."
+                    )
+                
+                quote = random.choice(available_quotes)
+                current_card_content.append(quote)
+            
+            cards_content[i] = current_card_content
 
     return cards_content
 
